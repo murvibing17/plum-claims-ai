@@ -683,95 +683,114 @@ export default function Home() {
     setOcrError("");
   }
 
-  async function runClaimOCR(
-    files: File[]
-  ) {
-    if (files.length === 0) {
-      return null;
+  async function runClaimOCR(files: File[]) {
+  if (files.length === 0) {
+    return null;
+  }
+
+  setOcrLoading(true);
+  setOcrError("");
+
+  try {
+    const formData = new FormData();
+
+    for (const file of files) {
+      formData.append("files", file);
     }
 
-    setOcrLoading(true);
-    setOcrError("");
+    /*
+     * No client-side timeout.
+     *
+     * The browser will wait for the OCR API response.
+     * This allows local Tesseract OCR to take as long
+     * as it needs instead of artificially aborting after
+     * a few seconds.
+     */
+    const response = await fetch("/api/claim-ocr", {
+      method: "POST",
+      body: formData,
+    });
 
-    const controller =
-      new AbortController();
-
-    const timeoutId =
-  window.setTimeout(() => {
-    controller.abort();
-  }, 110000);
+    let data: {
+  success?: boolean;
+  error?: string;
+  processingState?: "NORMAL" | "DEGRADED";
+  confidence?: number;
+  documents: {
+        fileName: string;
+        fileType: string;
+        ocr: {
+          text: string;
+          confidence: number;
+          processingState:
+            | "NORMAL"
+            | "DEGRADED";
+          trace: string[];
+        };
+      }[];
+      combinedText?: string;
+      trace?: string[];
+    };
 
     try {
-      const formData =
-        new FormData();
-
-      for (const file of files) {
-        formData.append(
-          "files",
-          file
-        );
-      }
-
-      const response =
-        await fetch(
-          "/api/claim-ocr",
-          {
-            method: "POST",
-            body: formData,
-            signal:
-              controller.signal,
-          }
-        );
-
-      const data =
-        await response.json();
-
-      if (
-        !response.ok ||
-        !data.success
-      ) {
-        throw new Error(
-          data.error ??
-            "OCR processing failed."
-        );
-      }
-
-      setOcrResult(data);
-
-      return data;
-    } catch (error) {
-      const message =
-        error instanceof DOMException &&
-        error.name === "AbortError"
-          ? "OCR service timed out. Identity verification cannot be completed."
-          : error instanceof Error
-            ? error.message
-            : "Unable to connect to the OCR service.";
-
-      console.warn(
-        "OCR degraded:",
-        message
+      data = await response.json();
+    } catch {
+      throw new Error(
+        `OCR service returned an invalid response (HTTP ${response.status}).`
       );
-
-      setOcrError(message);
-      setOcrResult(null);
-
-      /*
-       * IMPORTANT:
-       *
-       * OCR failure must NOT silently continue
-       * into policy decisioning because the system
-       * cannot verify patient identity.
-       */
-      return null;
-    } finally {
-      window.clearTimeout(
-        timeoutId
-      );
-
-      setOcrLoading(false);
     }
+
+    if (!response.ok || !data.success) {
+      throw new Error(
+        data.error ??
+          `OCR processing failed with status ${response.status}.`
+      );
+    }
+
+    setOcrResult({
+      processingState:
+        data.processingState ?? "DEGRADED",
+
+      confidence:
+        data.confidence ?? 0,
+
+      documents:
+        data.documents ?? [],
+
+      combinedText:
+        data.combinedText ?? "",
+
+      trace:
+        data.trace ?? [],
+    });
+
+    return data;
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Unable to connect to the OCR service.";
+
+    console.warn(
+      "OCR degraded:",
+      message
+    );
+
+    setOcrError(message);
+    setOcrResult(null);
+
+    /*
+     * IMPORTANT:
+     *
+     * OCR failure must NOT silently continue
+     * into policy decisioning because the system
+     * cannot verify patient identity.
+     */
+    return null;
+  } finally {
+    setOcrLoading(false);
   }
+}
 
   async function handleSubmit(
     event: React.FormEvent<HTMLFormElement>
