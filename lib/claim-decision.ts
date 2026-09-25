@@ -888,7 +888,19 @@ function calculateDentalClaim(
     !input.dentalItems ||
     input.dentalItems.length === 0
   ) {
-    return null;
+    trace.push(
+      "Dental line items were not available. Generic dental approval is blocked."
+    );
+
+    return {
+      decision: "MANUAL_REVIEW",
+      approvedAmount: 0,
+      reason:
+        "Dental claim requires itemized treatment lines to determine which procedures are covered or excluded.",
+      confidence: 0.45,
+      processingState: "DEGRADED",
+      trace,
+    };
   }
 
   const category =

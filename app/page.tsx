@@ -792,6 +792,61 @@ export default function Home() {
   }
 }
 
+  function extractDentalItemsFromOCR(
+    documents: { fileName: string; ocr: { text: string } }[]
+  ): { description: string; amount: number }[] {
+    const items: { description: string; amount: number }[] = [];
+
+    for (const document of documents) {
+      const text = document.ocr.text || "";
+      const lines = text
+        .split(/\r?\n/)
+        .map((line) => line.replace(/[©|]/g, " ").trim())
+        .filter(Boolean);
+
+      for (const line of lines) {
+        const amountMatch = line.match(
+          /(?:₹|INR|Rs\.?\s*)?([0-9]{1,3}(?:,[0-9]{3})+(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)\s*$/i
+        );
+
+        if (!amountMatch) continue;
+
+        const amount = Number(amountMatch[1].replace(/,/g, ""));
+        if (!Number.isFinite(amount) || amount <= 0) continue;
+
+        const description = line
+          .slice(0, amountMatch.index ?? line.length)
+          .replace(/(?:₹|INR|Rs\.?)[\s:]*/gi, " ")
+          .replace(/[-:©|]+\s*$/g, "")
+          .trim();
+
+        const normalized = description.toLowerCase();
+
+        const isDentalProcedure =
+          /root\s*canal|extraction|filling|scaling|polishing|dental\s*x[- ]?ray|crown\s*placement|gum\s*treatment|whitening|veneers|braces|cosmetic\s*implants|bleaching/.test(
+            normalized
+          );
+
+        if (!isDentalProcedure) continue;
+
+        if (
+          !items.some(
+            (item) =>
+              item.description.toLowerCase() === normalized &&
+              item.amount === amount
+          )
+        ) {
+          items.push({
+            description,
+            amount,
+          });
+        }
+      }
+    }
+
+    return items;
+  }
+
   async function handleSubmit(
     event: React.FormEvent<HTMLFormElement>
   ) {
@@ -834,6 +889,11 @@ export default function Home() {
 
       let unreadableFiles: string[] =
         [];
+
+      let extractedDentalItems: {
+        description: string;
+        amount: number;
+      }[] | undefined;
 
       if (
         demo?.unreadableFiles
@@ -962,6 +1022,35 @@ export default function Home() {
          * STEP 3 — EXTRACT STRUCTURED IDENTITY DATA
          * ===================================================
          */
+
+        if (form.treatmentType === "DENTAL") {
+          extractedDentalItems =
+            extractDentalItemsFromOCR(
+              ocrData.documents
+            );
+
+          if (extractedDentalItems.length === 0) {
+            setDocumentResult({
+              ok: false,
+              message:
+                "Dental line items could not be extracted from the uploaded bill. Please upload a readable bill showing each treatment and amount.",
+              detected: verification.detected,
+              trace: [
+                ...verification.trace,
+                "Dental claim detected.",
+                "No covered/excluded dental line items could be extracted from OCR.",
+                "Claim processing stopped before policy decisioning.",
+              ],
+            });
+            setLoading(false);
+            return;
+          }
+
+          console.info(
+            "Dental line items extracted:",
+            extractedDentalItems
+          );
+        }
 
         const extraction =
           extractClaimDocuments(
@@ -1155,8 +1244,17 @@ export default function Home() {
           demo?.simulateComponentFailure ??
           false,
 
+        /*
+         * Dental claims must always carry itemized treatment lines.
+         * Demo/evaluation cases already contain trusted line items.
+         * Real uploaded dental bills use OCR-extracted line items.
+         */
         dentalItems:
-          demo?.dentalItems,
+          form.treatmentType === "DENTAL"
+            ? (uploadedFiles.length === 0
+                ? demo?.dentalItems
+                : extractedDentalItems)
+            : undefined,
       };
 
       const result =
