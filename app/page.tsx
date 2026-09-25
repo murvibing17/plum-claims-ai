@@ -5,8 +5,13 @@ import { useState } from "react";
 import {
   requiredDocuments,
   verifyDocuments,
+  verifyClaimIdentity,
   type TreatmentType,
 } from "../lib/document-checker";
+
+import {
+  extractClaimDocuments,
+} from "../lib/document-extractor";
 
 import {
   evaluateClaim,
@@ -330,7 +335,8 @@ export default function Home() {
   const [decisionResult, setDecisionResult] =
     useState<DecisionResult | null>(null);
 
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] =
+    useState(false);
 
   const [runningAllTests, setRunningAllTests] =
     useState(false);
@@ -345,7 +351,9 @@ export default function Home() {
         ocr: {
           text: string;
           confidence: number;
-          processingState: "NORMAL" | "DEGRADED";
+          processingState:
+            | "NORMAL"
+            | "DEGRADED";
           trace: string[];
         };
       }[];
@@ -368,14 +376,16 @@ export default function Home() {
   const [simulatePatientMismatch, setSimulatePatientMismatch] =
     useState(false);
 
-  const currentDemoCase = demoCases.find(
-    (item) => item.id === selectedCase
-  );
+  const currentDemoCase =
+    demoCases.find(
+      (item) => item.id === selectedCase
+    );
 
   function loadDemoCase(caseId: string) {
-    const demo = demoCases.find(
-      (item) => item.id === caseId
-    );
+    const demo =
+      demoCases.find(
+        (item) => item.id === caseId
+      );
 
     if (!demo) return;
 
@@ -383,12 +393,16 @@ export default function Home() {
 
     setForm({
       employeeId: demo.employeeId,
-      treatmentType: demo.treatmentType,
+      treatmentType:
+        demo.treatmentType,
       amount: String(demo.amount),
-      treatmentDate: demo.treatmentDate,
+      treatmentDate:
+        demo.treatmentDate,
       diagnosis: demo.diagnosis,
-      hospitalName: demo.hospitalName,
-      hasPreAuth: demo.hasPreAuth,
+      hospitalName:
+        demo.hospitalName,
+      hasPreAuth:
+        demo.hasPreAuth,
       sameDayClaimsBefore: String(
         demo.sameDayClaimsBefore ?? 0
       ),
@@ -407,13 +421,17 @@ export default function Home() {
     setDecisionResult(null);
 
     setSimulateUnreadable(
-      Boolean(demo.unreadableFiles?.length)
+      Boolean(
+        demo.unreadableFiles?.length
+      )
     );
 
     setSimulatePatientMismatch(
       Boolean(
         demo.patientNames &&
-          new Set(demo.patientNames).size > 1
+          new Set(
+            demo.patientNames
+          ).size > 1
       )
     );
   }
@@ -422,22 +440,42 @@ export default function Home() {
     demo: DemoCase
   ): ClaimInput {
     return {
-      employeeId: demo.employeeId,
-      treatmentType: demo.treatmentType,
-      amount: demo.amount,
-      treatmentDate: demo.treatmentDate,
-      diagnosis: demo.diagnosis,
-      hospitalName: demo.hospitalName,
-      hasPreAuth: demo.hasPreAuth,
+      employeeId:
+        demo.employeeId,
+
+      treatmentType:
+        demo.treatmentType,
+
+      amount:
+        demo.amount,
+
+      treatmentDate:
+        demo.treatmentDate,
+
+      diagnosis:
+        demo.diagnosis,
+
+      hospitalName:
+        demo.hospitalName,
+
+      hasPreAuth:
+        demo.hasPreAuth,
+
       sameDayClaimsBefore:
         demo.sameDayClaimsBefore ?? 0,
+
       monthlyClaimsBefore:
         demo.monthlyClaimsBefore ?? 0,
+
       ytdClaimsAmount:
         demo.ytdClaimsAmount ?? 0,
+
       simulateComponentFailure:
-        demo.simulateComponentFailure ?? false,
-      dentalItems: demo.dentalItems,
+        demo.simulateComponentFailure ??
+        false,
+
+      dentalItems:
+        demo.dentalItems,
     };
   }
 
@@ -448,36 +486,51 @@ export default function Home() {
      * STEP 1:
      * Verify documents.
      */
-    const verification = verifyDocuments({
-      treatmentType: demo.treatmentType,
-      filenames: demo.files,
-      unreadableFiles:
-        demo.unreadableFiles ?? [],
-      patientNames:
-        demo.patientNames ?? [],
-    });
+    const verification =
+      verifyDocuments({
+        treatmentType:
+          demo.treatmentType,
+
+        filenames:
+          demo.files,
+
+        unreadableFiles:
+          demo.unreadableFiles ?? [],
+
+        patientNames:
+          demo.patientNames ?? [],
+      });
 
     /*
      * TC001-TC003 should stop before
      * claim decision.
      */
     if (demo.expected.documentBlocked) {
-      const passed = !verification.ok;
+      const passed =
+        !verification.ok;
 
       return {
         id: demo.id,
         title: demo.title,
         passed,
-        actualDecision: verification.ok
-          ? "DECISION_CREATED"
-          : "BLOCKED",
+
+        actualDecision:
+          verification.ok
+            ? "DECISION_CREATED"
+            : "BLOCKED",
+
         actualAmount: 0,
+
         expectedText:
           "DOCUMENT_BLOCKED",
-        actualText: verification.ok
-          ? "DOCUMENTS_ACCEPTED"
-          : "DOCUMENTS_BLOCKED",
-        reason: verification.message,
+
+        actualText:
+          verification.ok
+            ? "DOCUMENTS_ACCEPTED"
+            : "DOCUMENTS_BLOCKED",
+
+        reason:
+          verification.message,
       };
     }
 
@@ -490,14 +543,22 @@ export default function Home() {
         id: demo.id,
         title: demo.title,
         passed: false,
-        actualDecision: "DOCUMENT_BLOCKED",
+
+        actualDecision:
+          "DOCUMENT_BLOCKED",
+
         actualAmount: 0,
+
         expectedText:
           `${demo.expected.decision ?? "UNKNOWN"} ₹${
             demo.expected.approvedAmount ?? 0
           }`,
-        actualText: "DOCUMENT_BLOCKED",
-        reason: verification.message,
+
+        actualText:
+          "DOCUMENT_BLOCKED",
+
+        reason:
+          verification.message,
       };
     }
 
@@ -508,21 +569,29 @@ export default function Home() {
     let result: DecisionResult;
 
     try {
-      result = evaluateClaim(
-        buildClaimInput(demo)
-      );
+      result =
+        evaluateClaim(
+          buildClaimInput(demo)
+        );
     } catch (error) {
       return {
         id: demo.id,
         title: demo.title,
         passed: false,
-        actualDecision: "ERROR",
+
+        actualDecision:
+          "ERROR",
+
         actualAmount: 0,
+
         expectedText:
           `${demo.expected.decision ?? "UNKNOWN"} ₹${
             demo.expected.approvedAmount ?? 0
           }`,
-        actualText: "ERROR",
+
+        actualText:
+          "ERROR",
+
         reason:
           error instanceof Error
             ? error.message
@@ -537,26 +606,40 @@ export default function Home() {
       demo.expected.approvedAmount ?? 0;
 
     const decisionMatches =
-      result.decision === expectedDecision;
+      result.decision ===
+      expectedDecision;
 
     const amountMatches =
-      Math.round(result.approvedAmount) ===
-      Math.round(expectedAmount);
+      Math.round(
+        result.approvedAmount
+      ) ===
+      Math.round(
+        expectedAmount
+      );
 
     const passed =
-      decisionMatches && amountMatches;
+      decisionMatches &&
+      amountMatches;
 
     return {
       id: demo.id,
       title: demo.title,
       passed,
-      actualDecision: result.decision,
-      actualAmount: result.approvedAmount,
+
+      actualDecision:
+        result.decision,
+
+      actualAmount:
+        result.approvedAmount,
+
       expectedText:
         `${expectedDecision} ₹${expectedAmount}`,
+
       actualText:
         `${result.decision} ₹${result.approvedAmount}`,
-      reason: result.reason,
+
+      reason:
+        result.reason,
     };
   }
 
@@ -568,14 +651,12 @@ export default function Home() {
     setOcrResult(null);
     setOcrError("");
 
-    /*
-     * Small timeout allows the UI to show
-     * "Running..." before processing.
-     */
     setTimeout(() => {
-      const results = demoCases.map(
-        (demo) => runSingleDemoCase(demo)
-      );
+      const results =
+        demoCases.map(
+          (demo) =>
+            runSingleDemoCase(demo)
+        );
 
       setTestResults(results);
       setRunningAllTests(false);
@@ -591,7 +672,9 @@ export default function Home() {
     }
 
     setUploadedFiles(
-      Array.from(event.target.files)
+      Array.from(
+        event.target.files
+      )
     );
 
     setDocumentResult(null);
@@ -600,71 +683,100 @@ export default function Home() {
     setOcrError("");
   }
 
-async function runClaimOCR(files: File[]) {
-  if (files.length === 0) {
-    return null;
-  }
-
-  setOcrLoading(true);
-  setOcrError("");
-
-  const controller = new AbortController();
-
-  const timeoutId = window.setTimeout(() => {
-    controller.abort();
-  }, 12000);
-
-  try {
-    const formData = new FormData();
-
-    for (const file of files) {
-      formData.append("files", file);
+  async function runClaimOCR(
+    files: File[]
+  ) {
+    if (files.length === 0) {
+      return null;
     }
 
-    const response = await fetch("/api/claim-ocr", {
-      method: "POST",
-      body: formData,
-      signal: controller.signal,
-    });
+    setOcrLoading(true);
+    setOcrError("");
 
-    const data = await response.json();
+    const controller =
+      new AbortController();
 
-    if (!response.ok || !data.success) {
-      throw new Error(
-        data.error ?? "OCR processing failed."
+    const timeoutId =
+      window.setTimeout(() => {
+        controller.abort();
+      }, 12000);
+
+    try {
+      const formData =
+        new FormData();
+
+      for (const file of files) {
+        formData.append(
+          "files",
+          file
+        );
+      }
+
+      const response =
+        await fetch(
+          "/api/claim-ocr",
+          {
+            method: "POST",
+            body: formData,
+            signal:
+              controller.signal,
+          }
+        );
+
+      const data =
+        await response.json();
+
+      if (
+        !response.ok ||
+        !data.success
+      ) {
+        throw new Error(
+          data.error ??
+            "OCR processing failed."
+        );
+      }
+
+      setOcrResult(data);
+
+      return data;
+    } catch (error) {
+      const message =
+        error instanceof DOMException &&
+        error.name === "AbortError"
+          ? "OCR service timed out. Identity verification cannot be completed."
+          : error instanceof Error
+            ? error.message
+            : "Unable to connect to the OCR service.";
+
+      console.warn(
+        "OCR degraded:",
+        message
       );
+
+      setOcrError(message);
+      setOcrResult(null);
+
+      /*
+       * IMPORTANT:
+       *
+       * OCR failure must NOT silently continue
+       * into policy decisioning because the system
+       * cannot verify patient identity.
+       */
+      return null;
+    } finally {
+      window.clearTimeout(
+        timeoutId
+      );
+
+      setOcrLoading(false);
     }
-
-    setOcrResult(data);
-
-    return data;
-  } catch (error) {
-    const message =
-      error instanceof DOMException &&
-      error.name === "AbortError"
-        ? "OCR service timed out. Continuing claim review in degraded mode."
-        : error instanceof Error
-          ? error.message
-          : "Unable to connect to the OCR service.";
-
-    console.warn("OCR degraded:", message);
-
-    setOcrError(message);
-    setOcrResult(null);
-
-    // OCR failure must not block the policy decision engine.
-    return null;
-  } finally {
-    window.clearTimeout(timeoutId);
-    setOcrLoading(false);
   }
-} // ← THIS closes runClaimOCR
 
-
-async function handleSubmit(
-  event: React.FormEvent<HTMLFormElement>
-) {
-  event.preventDefault();
+  async function handleSubmit(
+    event: React.FormEvent<HTMLFormElement>
+  ) {
+    event.preventDefault();
 
     setLoading(true);
     setDocumentResult(null);
@@ -672,7 +784,8 @@ async function handleSubmit(
     setOcrError("");
 
     try {
-      const demo = currentDemoCase;
+      const demo =
+        currentDemoCase;
 
       const fileNames =
         uploadedFiles.length > 0
@@ -681,7 +794,9 @@ async function handleSubmit(
             )
           : demo?.files ?? [];
 
-      if (fileNames.length === 0) {
+      if (
+        fileNames.length === 0
+      ) {
         setDocumentResult({
           ok: false,
           message:
@@ -692,22 +807,46 @@ async function handleSubmit(
         return;
       }
 
-      let unreadableFiles: string[] = [];
+      /*
+       * =====================================================
+       * STEP 1 — DOCUMENT VERIFICATION
+       * =====================================================
+       */
 
-      if (demo?.unreadableFiles) {
+      let unreadableFiles: string[] =
+        [];
+
+      if (
+        demo?.unreadableFiles
+      ) {
         unreadableFiles =
           demo.unreadableFiles;
-      } else if (simulateUnreadable) {
+      } else if (
+        simulateUnreadable
+      ) {
         unreadableFiles = [
-          fileNames[fileNames.length - 1],
+          fileNames[
+            fileNames.length - 1
+          ],
         ];
       }
 
-      let patientNames: string[] = [];
+      /*
+       * Demo cases use simulated
+       * patient names.
+       *
+       * Real uploads get identity
+       * information from OCR below.
+       */
+      let patientNames: string[] =
+        [];
 
       if (demo?.patientNames) {
-        patientNames = demo.patientNames;
-      } else if (simulatePatientMismatch) {
+        patientNames =
+          demo.patientNames;
+      } else if (
+        simulatePatientMismatch
+      ) {
         patientNames = [
           "Rajesh Kumar",
           "Arjun Mehta",
@@ -718,72 +857,316 @@ async function handleSubmit(
         verifyDocuments({
           treatmentType:
             form.treatmentType,
-          filenames: fileNames,
+
+          filenames:
+            fileNames,
+
           unreadableFiles,
+
           patientNames,
         });
 
-      setDocumentResult(verification);
+      setDocumentResult(
+        verification
+      );
 
+      /*
+       * Required document validation
+       * remains the first hard gate.
+       */
       if (!verification.ok) {
         setLoading(false);
         return;
       }
 
-      // OCR is an extraction/observability layer.
-      // It runs only after document verification succeeds,
-      // so early-stop verification remains the first gate.
-      if (uploadedFiles.length > 0) {
-        await runClaimOCR(uploadedFiles);
+      /*
+       * =====================================================
+       * STEP 2 — REAL OCR + IDENTITY VERIFICATION
+       * =====================================================
+       *
+       * Real uploaded documents:
+       *
+       * File
+       *   ↓
+       * OCR
+       *   ↓
+       * Structured extraction
+       *   ↓
+       * Patient name + employee ID
+       *   ↓
+       * Policy roster verification
+       *   ↓
+       * Policy decision
+       */
+
+      if (
+        uploadedFiles.length > 0
+      ) {
+        const ocrData =
+          await runClaimOCR(
+            uploadedFiles
+          );
+
+        /*
+         * OCR unavailable:
+         *
+         * We cannot safely verify identity.
+         * Therefore STOP before policy decisioning.
+         */
+        if (!ocrData) {
+          setDocumentResult({
+            ok: false,
+
+            message:
+              "Identity verification could not be completed because OCR was unavailable. Please retry with readable documents or send the claim for manual review.",
+
+            detected:
+              verification.detected,
+
+            trace: [
+              ...verification.trace,
+
+              "OCR was unavailable.",
+
+              "Patient name and employee ID could not be verified from the uploaded documents.",
+
+              "Claim processing stopped before policy decisioning.",
+            ],
+          });
+
+          setLoading(false);
+          return;
+        }
+
+        /*
+         * ===================================================
+         * STEP 3 — EXTRACT STRUCTURED IDENTITY DATA
+         * ===================================================
+         */
+
+        const extraction =
+          extractClaimDocuments(
+            ocrData.documents.map(
+              (document: {
+                fileName: string;
+                ocr: {
+                  text: string;
+                };
+              }) => ({
+                filename:
+                  document.fileName,
+
+                text:
+                  document.ocr.text,
+              })
+            )
+          );
+
+        /*
+         * Patient names extracted
+         * from OCR documents.
+         */
+        const extractedPatientNames =
+          extraction.documents
+            .map(
+              (document) =>
+                document.fields
+                  .patientName
+                  ?.value
+            )
+            .filter(
+              (
+                name
+              ): name is string =>
+                Boolean(name)
+            );
+
+        /*
+         * Employee IDs extracted
+         * from OCR documents.
+         */
+        const extractedEmployeeIds =
+          extraction.documents
+            .map(
+              (document) =>
+                document.fields
+                  .employeeId
+                  ?.value
+            )
+            .filter(
+              (
+                id
+              ): id is string =>
+                Boolean(id)
+            );
+
+        /*
+         * ===================================================
+         * STEP 4 — VERIFY EMPLOYEE + PATIENT
+         * ===================================================
+         *
+         * This is the critical security gate.
+         *
+         * Example:
+         *
+         * Claim form:
+         * EMP001
+         *
+         * Uploaded bill:
+         * Patient: Arjun Mehta
+         *
+         * Policy roster:
+         * EMP001 -> Rajesh Kumar
+         *
+         * Result:
+         * BLOCKED
+         *
+         * The claim never reaches evaluateClaim().
+         */
+
+        const identityVerification =
+          verifyClaimIdentity({
+            employeeId:
+              form.employeeId,
+
+            patientNames:
+              extractedPatientNames,
+
+            employeeIds:
+              extractedEmployeeIds,
+          });
+
+        /*
+         * Add identity information
+         * to the document trace.
+         */
+        setDocumentResult({
+          ok:
+            verification.ok &&
+            identityVerification.ok,
+
+          message:
+            identityVerification.ok
+              ? `${verification.message} ${identityVerification.message}`
+              : identityVerification.message,
+
+          detected:
+            verification.detected,
+
+          trace: [
+            ...verification.trace,
+
+            ...identityVerification.trace,
+          ],
+        });
+
+        /*
+         * ===================================================
+         * HARD STOP ON IDENTITY FAILURE
+         * ===================================================
+         *
+         * EMP001 + someone else's bill
+         * cannot proceed.
+         */
+        if (
+          !identityVerification.ok
+        ) {
+          setLoading(false);
+          return;
+        }
       } else {
+        /*
+         * Demo cases have no real uploaded
+         * documents, so keep deterministic
+         * evaluation behavior.
+         */
         setOcrResult(null);
       }
 
+      /*
+       * =====================================================
+       * STEP 5 — POLICY DECISION
+       * =====================================================
+       *
+       * Reached only after:
+       *
+       * 1. Required document verification
+       * 2. OCR identity verification for real uploads
+       * 3. Employee/patient roster validation
+       */
+
       const claimInput: ClaimInput = {
-        employeeId: form.employeeId,
+        employeeId:
+          form.employeeId,
+
         treatmentType:
           form.treatmentType,
-        amount: Number(form.amount),
+
+        amount:
+          Number(form.amount),
+
         treatmentDate:
           form.treatmentDate,
-        diagnosis: form.diagnosis,
+
+        diagnosis:
+          form.diagnosis,
+
         hospitalName:
           form.hospitalName,
+
         hasPreAuth:
           form.hasPreAuth,
+
         sameDayClaimsBefore:
           Number(
             form.sameDayClaimsBefore
           ),
+
         monthlyClaimsBefore:
           Number(
             form.monthlyClaimsBefore
           ),
+
         ytdClaimsAmount:
           Number(
             form.ytdClaimsAmount
           ),
+
         simulateComponentFailure:
           demo?.simulateComponentFailure ??
           false,
+
         dentalItems:
           demo?.dentalItems,
       };
 
       const result =
-        evaluateClaim(claimInput);
+        evaluateClaim(
+          claimInput
+        );
 
-      setDecisionResult(result);
+      setDecisionResult(
+        result
+      );
     } catch (error) {
       console.error(error);
 
       setDecisionResult({
-        decision: "MANUAL_REVIEW",
-        approvedAmount: 0,
+        decision:
+          "MANUAL_REVIEW",
+
+        approvedAmount:
+          0,
+
         reason:
           "The claim engine encountered an unexpected error. The claim has been moved to manual review.",
-        confidence: 0.3,
-        processingState: "DEGRADED",
+
+        confidence:
+          0.3,
+
+        processingState:
+          "DEGRADED",
+
         trace: [
           "Unexpected processing error captured safely.",
           "System did not crash.",
@@ -802,12 +1185,14 @@ async function handleSubmit(
 
   const passedTests =
     testResults.filter(
-      (result) => result.passed
+      (result) =>
+        result.passed
     ).length;
 
   const failedTests =
     testResults.filter(
-      (result) => !result.passed
+      (result) =>
+        !result.passed
     ).length;
 
   return (
@@ -820,10 +1205,12 @@ async function handleSubmit(
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.06] text-lg font-black text-white">
                   P
                 </div>
+
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-300">
                     Plum AI
                   </p>
+
                   <p className="text-xs text-slate-400">
                     Intelligent claims operations
                   </p>
@@ -845,10 +1232,12 @@ async function handleSubmit(
 
             <div className="flex shrink-0 items-center gap-3 rounded-xl border border-emerald-400/20 bg-emerald-400/[0.06] px-4 py-3">
               <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-emerald-400 shadow-lg shadow-emerald-400/60" />
+
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wider text-emerald-300">
                   System Ready
                 </p>
+
                 <p className="text-xs text-slate-400">
                   Policy + OCR + decision engine
                 </p>
@@ -864,77 +1253,125 @@ async function handleSubmit(
                 ["03", "OCR"],
                 ["04", "Policy"],
                 ["05", "Decision"],
-              ].map(([number, label], index) => (
-                <div key={number} className="flex items-center gap-2">
-                  <span className="rounded-full border border-violet-400/20 bg-violet-400/10 px-3 py-1.5 text-violet-200">
-                    {number} · {label}
-                  </span>
-                  {index < 4 && (
-                    <span className="hidden text-slate-600 sm:inline">→</span>
-                  )}
-                </div>
-              ))}
+              ].map(
+                ([number, label], index) => (
+                  <div
+                    key={number}
+                    className="flex items-center gap-2"
+                  >
+                    <span className="rounded-full border border-violet-400/20 bg-violet-400/10 px-3 py-1.5 text-violet-200">
+                      {number} · {label}
+                    </span>
+
+                    {index < 4 && (
+                      <span className="hidden text-slate-600 sm:inline">
+                        →
+                      </span>
+                    )}
+                  </div>
+                )
+              )}
             </div>
           </div>
         </header>
 
         <section className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {[
-            ["POLICY", "JSON-driven rules", "No hardcoded policy logic"],
-            ["DOCUMENTS", "Verify before AI", "Early-stop validation"],
-            ["OCR", "Local Tesseract", "Confidence-aware extraction"],
-            ["DECISION", "Explainable output", "Amount + reason + trace"],
-          ].map(([label, value, detail]) => (
-            <div
-              key={label}
-              className="group rounded-2xl border border-white/10 bg-white/[0.045] p-4 shadow-lg backdrop-blur-xl transition hover:-translate-y-0.5 hover:border-violet-400/20"
-            >
-              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-500">
-                {label}
-              </p>
-              <p className="mt-2 text-sm font-black text-white">{value}</p>
-              <p className="mt-1 text-[11px] text-slate-500">{detail}</p>
-            </div>
-          ))}
+            [
+              "POLICY",
+              "JSON-driven rules",
+              "No hardcoded policy logic",
+            ],
+            [
+              "DOCUMENTS",
+              "Verify before AI",
+              "Early-stop validation",
+            ],
+            [
+              "OCR",
+              "Local Tesseract",
+              "Confidence-aware extraction",
+            ],
+            [
+              "DECISION",
+              "Explainable output",
+              "Amount + reason + trace",
+            ],
+          ].map(
+            ([label, value, detail]) => (
+              <div
+                key={label}
+                className="group rounded-2xl border border-white/10 bg-white/[0.045] p-4 shadow-lg backdrop-blur-xl transition hover:-translate-y-0.5 hover:border-violet-400/20"
+              >
+                <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-500">
+                  {label}
+                </p>
+
+                <p className="mt-2 text-sm font-black text-white">
+                  {value}
+                </p>
+
+                <p className="mt-1 text-[11px] text-slate-500">
+                  {detail}
+                </p>
+              </div>
+            )
+          )}
         </section>
 
         <div className="mb-6 rounded-2xl border border-violet-400/10 bg-gradient-to-r from-violet-500/[0.08] via-fuchsia-500/[0.04] to-cyan-500/[0.06] px-4 py-3 text-xs text-slate-400 shadow-lg backdrop-blur-xl">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <span><strong className="text-slate-200">Production flow:</strong> verify → extract → evaluate policy → explain decision</span>
-            <span className="font-semibold text-violet-300">Built for auditable claim operations</span>
+            <span>
+              <strong className="text-slate-200">
+                Production flow:
+              </strong>{" "}
+              verify → extract → evaluate policy → explain decision
+            </span>
+
+            <span className="font-semibold text-violet-300">
+              Built for auditable claim operations
+            </span>
           </div>
         </div>
 
         <div className="grid gap-6 xl:grid-cols-2">
-
-
           <section className="rounded-3xl border border-white/10 bg-white/[0.05] p-5 shadow-2xl backdrop-blur-xl sm:p-6">
             <div className="mb-6 flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-300">
                   Step 01 · Claim Intake
                 </p>
+
                 <h2 className="mt-1 text-2xl font-black text-white">
                   Claim details
                 </h2>
               </div>
+
               <span className="hidden rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400 sm:inline-flex">
                 Live review
               </span>
-
-
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form
+              onSubmit={handleSubmit}
+              className="space-y-4"
+            >
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-500">
                     Employee ID
                   </label>
+
                   <input
-                    value={form.employeeId}
+                    value={
+                      form.employeeId
+                    }
                     onChange={(e) =>
-                      setForm({ ...form, employeeId: e.target.value })
+                      setForm({
+                        ...form,
+                        employeeId:
+                          e.target.value,
+                      })
                     }
                     className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-violet-400/60 focus:ring-2 focus:ring-violet-500/10"
                   />
@@ -944,21 +1381,41 @@ async function handleSubmit(
                   <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-500">
                     Treatment Type
                   </label>
+
                   <select
-                    value={form.treatmentType}
+                    value={
+                      form.treatmentType
+                    }
                     onChange={(e) =>
                       setForm({
                         ...form,
-                        treatmentType: e.target.value as TreatmentType,
+                        treatmentType:
+                          e.target
+                            .value as TreatmentType,
                       })
                     }
                     className="w-full rounded-xl border border-white/10 bg-[#111827] px-3 py-2.5 text-sm text-white outline-none focus:border-violet-400/60"
                   >
-                    <option value="CONSULTATION">Consultation</option>
-                    <option value="DIAGNOSTIC">Diagnostic</option>
-                    <option value="PHARMACY">Pharmacy</option>
-                    <option value="DENTAL">Dental</option>
-                    <option value="VISION">Vision</option>
+                    <option value="CONSULTATION">
+                      Consultation
+                    </option>
+
+                    <option value="DIAGNOSTIC">
+                      Diagnostic
+                    </option>
+
+                    <option value="PHARMACY">
+                      Pharmacy
+                    </option>
+
+                    <option value="DENTAL">
+                      Dental
+                    </option>
+
+                    <option value="VISION">
+                      Vision
+                    </option>
+
                     <option value="ALTERNATIVE_MEDICINE">
                       Alternative Medicine
                     </option>
@@ -969,15 +1426,23 @@ async function handleSubmit(
                   <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-500">
                     Claim Amount
                   </label>
+
                   <div className="relative">
                     <span className="absolute left-3 top-2.5 text-sm text-slate-500">
                       ₹
                     </span>
+
                     <input
                       type="number"
-                      value={form.amount}
+                      value={
+                        form.amount
+                      }
                       onChange={(e) =>
-                        setForm({ ...form, amount: e.target.value })
+                        setForm({
+                          ...form,
+                          amount:
+                            e.target.value,
+                        })
                       }
                       className="w-full rounded-xl border border-white/10 bg-black/20 py-2.5 pl-8 pr-3 text-sm text-white outline-none focus:border-violet-400/60"
                     />
@@ -988,11 +1453,18 @@ async function handleSubmit(
                   <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-500">
                     Treatment Date
                   </label>
+
                   <input
                     type="date"
-                    value={form.treatmentDate}
+                    value={
+                      form.treatmentDate
+                    }
                     onChange={(e) =>
-                      setForm({ ...form, treatmentDate: e.target.value })
+                      setForm({
+                        ...form,
+                        treatmentDate:
+                          e.target.value,
+                      })
                     }
                     className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-white outline-none focus:border-violet-400/60"
                   />
@@ -1004,10 +1476,17 @@ async function handleSubmit(
                   <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-500">
                     Diagnosis
                   </label>
+
                   <input
-                    value={form.diagnosis}
+                    value={
+                      form.diagnosis
+                    }
                     onChange={(e) =>
-                      setForm({ ...form, diagnosis: e.target.value })
+                      setForm({
+                        ...form,
+                        diagnosis:
+                          e.target.value,
+                      })
                     }
                     className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-white outline-none focus:border-violet-400/60"
                   />
@@ -1017,10 +1496,17 @@ async function handleSubmit(
                   <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-500">
                     Hospital / Provider
                   </label>
+
                   <input
-                    value={form.hospitalName}
+                    value={
+                      form.hospitalName
+                    }
                     onChange={(e) =>
-                      setForm({ ...form, hospitalName: e.target.value })
+                      setForm({
+                        ...form,
+                        hospitalName:
+                          e.target.value,
+                      })
                     }
                     placeholder="e.g. Apollo Hospitals"
                     className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-white outline-none placeholder:text-slate-600 focus:border-violet-400/60"
@@ -1031,12 +1517,19 @@ async function handleSubmit(
               <label className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.025] p-3 text-sm text-slate-300">
                 <input
                   type="checkbox"
-                  checked={form.hasPreAuth}
+                  checked={
+                    form.hasPreAuth
+                  }
                   onChange={(e) =>
-                    setForm({ ...form, hasPreAuth: e.target.checked })
+                    setForm({
+                      ...form,
+                      hasPreAuth:
+                        e.target.checked,
+                    })
                   }
                   className="h-4 w-4 accent-violet-500"
                 />
+
                 Pre-authorization available
               </label>
 
@@ -1045,6 +1538,7 @@ async function handleSubmit(
                   <p className="text-sm font-bold text-white">
                     Step 02 · Upload documents
                   </p>
+
                   <p className="mt-1 text-xs text-slate-500">
                     PDF, JPG or PNG · Required documents are checked against policy.
                   </p>
@@ -1054,30 +1548,42 @@ async function handleSubmit(
                   type="file"
                   multiple
                   accept=".pdf,.jpg,.jpeg,.png"
-                  onChange={handleFileChange}
+                  onChange={
+                    handleFileChange
+                  }
                   className="w-full cursor-pointer rounded-xl border border-white/10 bg-black/20 p-3 text-xs text-slate-300 file:mr-3 file:rounded-lg file:border-0 file:bg-violet-500 file:px-3 file:py-2 file:text-xs file:font-bold file:text-white hover:file:bg-violet-400"
                 />
 
-                {uploadedFiles.length > 0 && (
+                {uploadedFiles.length >
+                  0 && (
                   <div className="mt-4 rounded-2xl border border-cyan-400/20 bg-cyan-400/[0.05] p-4">
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <p className="text-sm font-bold text-cyan-200">
                           Step 03 · Local OCR
                         </p>
+
                         <p className="mt-1 text-xs text-slate-500">
                           Tesseract extracts readable text after document verification.
                         </p>
                       </div>
+
                       <span className="rounded-full bg-cyan-400/10 px-3 py-1 text-xs font-bold text-cyan-300">
-                        {uploadedFiles.length} file
-                        {uploadedFiles.length === 1 ? "" : "s"}
+                        {
+                          uploadedFiles.length
+                        }{" "}
+                        file
+                        {uploadedFiles.length ===
+                        1
+                          ? ""
+                          : "s"}
                       </span>
                     </div>
 
                     {ocrLoading && (
                       <div className="mt-4 flex items-center gap-3 rounded-xl bg-white/[0.04] p-3 text-sm text-cyan-300">
                         <span className="h-2 w-2 animate-pulse rounded-full bg-cyan-300" />
+
                         Extracting document text...
                       </div>
                     )}
@@ -1085,8 +1591,9 @@ async function handleSubmit(
                     {ocrError && (
                       <div className="mt-4 rounded-xl border border-orange-400/20 bg-orange-400/[0.06] p-3">
                         <p className="text-sm font-bold text-orange-300">
-                          OCR degraded gracefully
+                          OCR degraded
                         </p>
+
                         <p className="mt-1 text-xs text-orange-200/70">
                           {ocrError}
                         </p>
@@ -1100,22 +1607,32 @@ async function handleSubmit(
                             <p className="text-[10px] uppercase tracking-wider text-slate-500">
                               OCR Confidence
                             </p>
+
                             <p className="mt-1 text-xl font-black text-white">
-                              {Math.round(ocrResult.confidence * 100)}%
+                              {Math.round(
+                                ocrResult.confidence *
+                                  100
+                              )}
+                              %
                             </p>
                           </div>
+
                           <div className="rounded-xl border border-white/10 bg-black/20 p-3">
                             <p className="text-[10px] uppercase tracking-wider text-slate-500">
                               State
                             </p>
+
                             <p
                               className={`mt-1 text-sm font-black ${
-                                ocrResult.processingState === "NORMAL"
+                                ocrResult.processingState ===
+                                "NORMAL"
                                   ? "text-emerald-300"
                                   : "text-orange-300"
                               }`}
                             >
-                              {ocrResult.processingState}
+                              {
+                                ocrResult.processingState
+                              }
                             </p>
                           </div>
                         </div>
@@ -1124,6 +1641,7 @@ async function handleSubmit(
                           <summary className="cursor-pointer text-xs font-bold text-slate-300">
                             View extracted text
                           </summary>
+
                           <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap rounded-xl bg-black/30 p-3 text-[11px] leading-5 text-slate-400">
                             {ocrResult.combinedText ||
                               "No readable text was extracted from the uploaded documents."}
@@ -1134,10 +1652,22 @@ async function handleSubmit(
                           <summary className="cursor-pointer text-xs font-bold text-slate-300">
                             View OCR trace
                           </summary>
+
                           <ol className="mt-3 list-decimal space-y-1 pl-5 text-[11px] leading-5 text-slate-500">
-                            {ocrResult.trace.map((item, index) => (
-                              <li key={index}>{item}</li>
-                            ))}
+                            {ocrResult.trace.map(
+                              (
+                                item,
+                                index
+                              ) => (
+                                <li
+                                  key={
+                                    index
+                                  }
+                                >
+                                  {item}
+                                </li>
+                              )
+                            )}
                           </ol>
                         </details>
                       </div>
@@ -1155,19 +1685,23 @@ async function handleSubmit(
                   <p className="text-sm font-bold text-white">
                     Policy requirements
                   </p>
+
                   <span className="rounded-full bg-violet-400/10 px-2.5 py-1 text-[10px] font-bold text-violet-300">
                     LIVE POLICY
                   </span>
                 </div>
+
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {requiredDocs.map((doc) => (
-                    <span
-                      key={doc}
-                      className="rounded-lg border border-white/10 bg-black/20 px-2.5 py-1.5 text-[11px] font-semibold text-slate-400"
-                    >
-                      {doc}
-                    </span>
-                  ))}
+                  {requiredDocs.map(
+                    (doc) => (
+                      <span
+                        key={doc}
+                        className="rounded-lg border border-white/10 bg-black/20 px-2.5 py-1.5 text-[11px] font-semibold text-slate-400"
+                      >
+                        {doc}
+                      </span>
+                    )
+                  )}
                 </div>
               </div>
 
@@ -1175,22 +1709,34 @@ async function handleSubmit(
                 <label className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.025] p-3 text-xs text-slate-400">
                   <input
                     type="checkbox"
-                    checked={simulateUnreadable}
-                    onChange={(e) => setSimulateUnreadable(e.target.checked)}
+                    checked={
+                      simulateUnreadable
+                    }
+                    onChange={(e) =>
+                      setSimulateUnreadable(
+                        e.target.checked
+                      )
+                    }
                     className="h-4 w-4 accent-violet-500"
                   />
+
                   Simulate unreadable document
                 </label>
 
                 <label className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.025] p-3 text-xs text-slate-400">
                   <input
                     type="checkbox"
-                    checked={simulatePatientMismatch}
+                    checked={
+                      simulatePatientMismatch
+                    }
                     onChange={(e) =>
-                      setSimulatePatientMismatch(e.target.checked)
+                      setSimulatePatientMismatch(
+                        e.target.checked
+                      )
                     }
                     className="h-4 w-4 accent-violet-500"
                   />
+
                   Simulate patient mismatch
                 </label>
               </div>
@@ -1201,8 +1747,11 @@ async function handleSubmit(
                 className="group relative w-full overflow-hidden rounded-2xl bg-gradient-to-r from-violet-600 via-fuchsia-600 to-cyan-500 px-5 py-3.5 text-sm font-black text-white shadow-xl shadow-violet-950/30 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <span className="relative z-10">
-                  {loading ? "Processing claim..." : "Review Claim →"}
+                  {loading
+                    ? "Processing claim..."
+                    : "Review Claim →"}
                 </span>
+
                 <span className="absolute inset-0 -translate-x-full bg-white/20 transition-transform duration-700 group-hover:translate-x-full" />
               </button>
             </form>
@@ -1213,6 +1762,7 @@ async function handleSubmit(
               <p className="text-xs font-bold uppercase tracking-[0.2em] text-emerald-300">
                 Step 04 · Decision
               </p>
+
               <h2 className="mt-1 text-2xl font-black text-white">
                 Claim review
               </h2>
@@ -1234,42 +1784,65 @@ async function handleSubmit(
                         : "bg-red-400/10 text-red-300"
                     }`}
                   >
-                    {documentResult.ok ? "✓" : "!"}
+                    {documentResult.ok
+                      ? "✓"
+                      : "!"}
                   </span>
+
                   <div>
                     <p className="text-sm font-bold text-white">
                       Document Verification
                     </p>
+
                     <p className="mt-0.5 text-xs text-slate-400">
-                      {documentResult.message}
+                      {
+                        documentResult.message
+                      }
                     </p>
                   </div>
                 </div>
 
                 {documentResult.detected &&
-                  documentResult.detected.length > 0 && (
+                  documentResult
+                    .detected.length >
+                    0 && (
                     <div className="mt-4 flex flex-wrap gap-2">
-                      {documentResult.detected.map((doc) => (
-                        <span
-                          key={`${doc.filename}-${doc.type}`}
-                          className="rounded-lg border border-white/10 bg-black/20 px-2.5 py-1.5 text-[10px] text-slate-400"
-                        >
-                          {doc.type}
-                        </span>
-                      ))}
+                      {documentResult.detected.map(
+                        (doc) => (
+                          <span
+                            key={`${doc.filename}-${doc.type}`}
+                            className="rounded-lg border border-white/10 bg-black/20 px-2.5 py-1.5 text-[10px] text-slate-400"
+                          >
+                            {doc.type}
+                          </span>
+                        )
+                      )}
                     </div>
                   )}
 
                 {documentResult.trace &&
-                  documentResult.trace.length > 0 && (
+                  documentResult.trace.length >
+                    0 && (
                     <details className="mt-4">
                       <summary className="cursor-pointer text-xs font-bold text-slate-400">
                         View verification trace
                       </summary>
+
                       <ul className="mt-2 list-disc space-y-1 pl-5 text-[11px] text-slate-500">
-                        {documentResult.trace.map((item, index) => (
-                          <li key={index}>{item}</li>
-                        ))}
+                        {documentResult.trace.map(
+                          (
+                            item,
+                            index
+                          ) => (
+                            <li
+                              key={
+                                index
+                              }
+                            >
+                              {item}
+                            </li>
+                          )
+                        )}
                       </ul>
                     </details>
                   )}
@@ -1280,11 +1853,14 @@ async function handleSubmit(
               <div className="space-y-4">
                 <div
                   className={`relative overflow-hidden rounded-3xl border p-6 ${
-                    decisionResult.decision === "APPROVED"
+                    decisionResult.decision ===
+                    "APPROVED"
                       ? "border-emerald-400/30 bg-emerald-400/[0.035]"
-                      : decisionResult.decision === "PARTIAL"
+                      : decisionResult.decision ===
+                          "PARTIAL"
                         ? "border-amber-400/30 bg-amber-400/[0.035]"
-                        : decisionResult.decision === "MANUAL_REVIEW"
+                        : decisionResult.decision ===
+                            "MANUAL_REVIEW"
                           ? "border-orange-400/30 bg-orange-400/[0.035]"
                           : "border-red-400/30 bg-red-400/[0.035]"
                   }`}
@@ -1294,29 +1870,39 @@ async function handleSubmit(
                       <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">
                         Final decision
                       </p>
+
                       <span
                         className={`rounded-full px-3 py-1 text-[10px] font-black ${
-                          decisionResult.processingState === "NORMAL"
+                          decisionResult.processingState ===
+                          "NORMAL"
                             ? "bg-emerald-400/10 text-emerald-300"
                             : "bg-orange-400/10 text-orange-300"
                         }`}
                       >
-                        {decisionResult.processingState}
+                        {
+                          decisionResult.processingState
+                        }
                       </span>
                     </div>
 
                     <p
                       className={`mt-4 text-4xl font-black tracking-tight ${
-                        decisionResult.decision === "APPROVED"
+                        decisionResult.decision ===
+                        "APPROVED"
                           ? "text-emerald-300"
-                          : decisionResult.decision === "PARTIAL"
+                          : decisionResult.decision ===
+                              "PARTIAL"
                             ? "text-amber-300"
-                            : decisionResult.decision === "MANUAL_REVIEW"
+                            : decisionResult.decision ===
+                                "MANUAL_REVIEW"
                               ? "text-orange-300"
                               : "text-red-300"
                       }`}
                     >
-                      {decisionResult.decision.replace("_", " ")}
+                      {decisionResult.decision.replace(
+                        "_",
+                        " "
+                      )}
                     </p>
 
                     <div className="mt-5 grid grid-cols-2 gap-3">
@@ -1324,6 +1910,7 @@ async function handleSubmit(
                         <p className="text-[10px] uppercase tracking-wider text-slate-500">
                           Approved amount
                         </p>
+
                         <p className="mt-1 text-2xl font-black text-white">
                           ₹
                           {decisionResult.approvedAmount.toLocaleString(
@@ -1331,12 +1918,18 @@ async function handleSubmit(
                           )}
                         </p>
                       </div>
+
                       <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
                         <p className="text-[10px] uppercase tracking-wider text-slate-500">
                           Confidence
                         </p>
+
                         <p className="mt-1 text-2xl font-black text-white">
-                          {Math.round(decisionResult.confidence * 100)}%
+                          {Math.round(
+                            decisionResult.confidence *
+                              100
+                          )}
+                          %
                         </p>
                       </div>
                     </div>
@@ -1347,8 +1940,11 @@ async function handleSubmit(
                   <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
                     Reason
                   </p>
+
                   <p className="mt-2 text-sm leading-6 text-slate-300">
-                    {decisionResult.reason}
+                    {
+                      decisionResult.reason
+                    }
                   </p>
                 </div>
 
@@ -1356,10 +1952,20 @@ async function handleSubmit(
                   <summary className="cursor-pointer text-xs font-bold uppercase tracking-wider text-slate-400">
                     Explainable decision trace
                   </summary>
+
                   <ol className="mt-4 list-decimal space-y-2 pl-5 text-xs leading-5 text-slate-500">
-                    {decisionResult.trace.map((item, index) => (
-                      <li key={index}>{item}</li>
-                    ))}
+                    {decisionResult.trace.map(
+                      (
+                        item,
+                        index
+                      ) => (
+                        <li
+                          key={index}
+                        >
+                          {item}
+                        </li>
+                      )
+                    )}
                   </ol>
                 </details>
               </div>
@@ -1368,9 +1974,11 @@ async function handleSubmit(
                 <div className="flex h-14 w-14 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-xl">
                   ✦
                 </div>
+
                 <p className="mt-5 text-lg font-bold text-white">
                   Ready for review
                 </p>
+
                 <p className="mt-2 max-w-xs text-sm leading-6 text-slate-500">
                   Enter claim details and upload the required documents. The
                   decision engine will show its reasoning here.
@@ -1383,16 +1991,24 @@ async function handleSubmit(
         <details className="mb-6 overflow-hidden rounded-2xl border border-white/10 bg-[#11161d] shadow-lg shadow-black/10">
           <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4">
             <div>
-              <p className="text-sm font-bold text-white">Evaluation Suite</p>
+              <p className="text-sm font-bold text-white">
+                Evaluation Suite
+              </p>
+
               <p className="mt-1 text-xs text-slate-400">
                 Automated verification of the 12 assignment scenarios
               </p>
             </div>
 
             <div className="flex items-center gap-3">
-              {testResults.length > 0 && (
+              {testResults.length >
+                0 && (
                 <span className="rounded-full bg-emerald-400/10 px-3 py-1 text-xs font-bold text-emerald-300">
-                  {passedTests}/{testResults.length} passed
+                  {passedTests}/
+                  {
+                    testResults.length
+                  }{" "}
+                  passed
                 </span>
               )}
 
@@ -1402,7 +2018,9 @@ async function handleSubmit(
                   event.preventDefault();
                   runAllTests();
                 }}
-                disabled={runningAllTests}
+                disabled={
+                  runningAllTests
+                }
                 className="rounded-lg border border-white/10 bg-white/[0.08] px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-white/[0.12] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {runningAllTests
@@ -1412,29 +2030,43 @@ async function handleSubmit(
             </div>
           </summary>
 
-          {testResults.length > 0 && (
+          {testResults.length >
+            0 && (
             <div className="border-t border-white/10 p-5">
               <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
                   <p className="text-xs uppercase tracking-wider text-slate-500">
                     Scenarios
                   </p>
-                  <p className="mt-1 text-2xl font-black">{testResults.length}</p>
+
+                  <p className="mt-1 text-2xl font-black">
+                    {
+                      testResults.length
+                    }
+                  </p>
                 </div>
+
                 <div className="rounded-xl border border-emerald-400/20 bg-emerald-400/[0.04] p-4">
                   <p className="text-xs uppercase tracking-wider text-emerald-400">
                     Passed
                   </p>
+
                   <p className="mt-1 text-2xl font-black text-emerald-300">
-                    {passedTests}
+                    {
+                      passedTests
+                    }
                   </p>
                 </div>
+
                 <div className="rounded-xl border border-red-400/20 bg-red-400/[0.04] p-4">
                   <p className="text-xs uppercase tracking-wider text-red-400">
                     Failed
                   </p>
+
                   <p className="mt-1 text-2xl font-black text-red-300">
-                    {failedTests}
+                    {
+                      failedTests
+                    }
                   </p>
                 </div>
               </div>
@@ -1443,32 +2075,75 @@ async function handleSubmit(
                 <table className="w-full text-left text-xs">
                   <thead className="bg-white/[0.04] text-slate-400">
                     <tr>
-                      <th className="p-3">Test</th>
-                      <th className="p-3">Scenario</th>
-                      <th className="p-3">Expected</th>
-                      <th className="p-3">Actual</th>
-                      <th className="p-3">Status</th>
+                      <th className="p-3">
+                        Test
+                      </th>
+
+                      <th className="p-3">
+                        Scenario
+                      </th>
+
+                      <th className="p-3">
+                        Expected
+                      </th>
+
+                      <th className="p-3">
+                        Actual
+                      </th>
+
+                      <th className="p-3">
+                        Status
+                      </th>
                     </tr>
                   </thead>
+
                   <tbody>
-                    {testResults.map((result) => (
-                      <tr
-                        key={result.id}
-                        className="border-t border-white/5 text-slate-300"
-                      >
-                        <td className="p-3 font-bold text-white">{result.id}</td>
-                        <td className="p-3">{result.title}</td>
-                        <td className="p-3">{result.expectedText}</td>
-                        <td className="p-3">{result.actualText}</td>
-                        <td className="p-3">
-                          {result.passed ? (
-                            <span className="font-bold text-emerald-400">✓ PASS</span>
-                          ) : (
-                            <span className="font-bold text-red-400">✗ FAIL</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
+                    {testResults.map(
+                      (result) => (
+                        <tr
+                          key={
+                            result.id
+                          }
+                          className="border-t border-white/5 text-slate-300"
+                        >
+                          <td className="p-3 font-bold text-white">
+                            {
+                              result.id
+                            }
+                          </td>
+
+                          <td className="p-3">
+                            {
+                              result.title
+                            }
+                          </td>
+
+                          <td className="p-3">
+                            {
+                              result.expectedText
+                            }
+                          </td>
+
+                          <td className="p-3">
+                            {
+                              result.actualText
+                            }
+                          </td>
+
+                          <td className="p-3">
+                            {result.passed ? (
+                              <span className="font-bold text-emerald-400">
+                                ✓ PASS
+                              </span>
+                            ) : (
+                              <span className="font-bold text-red-400">
+                                ✗ FAIL
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -1477,12 +2152,15 @@ async function handleSubmit(
         </details>
 
         <footer className="mt-8 flex flex-col gap-2 border-t border-white/10 py-5 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
-          <span>Plum Claims AI · Policy-driven claim automation</span>
-          <span>Local OCR · Explainable decisions · Graceful degradation</span>
+          <span>
+            Plum Claims AI · Policy-driven claim automation
+          </span>
+
+          <span>
+            Local OCR · Explainable decisions · Graceful degradation
+          </span>
         </footer>
       </div>
     </main>
   );
 }
-
-

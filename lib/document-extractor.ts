@@ -40,33 +40,18 @@ export type ExtractedDocument = {
 export type ExtractionInput = {
   filename: string;
   documentType?: string;
-
-  /*
-   * Optional text extracted from the document.
-   *
-   * Later this can come from OCR/PDF extraction/AI.
-   * For now the extractor can work with filenames
-   * and supplied text without requiring an external API.
-   */
   text?: string;
 };
 
 export type ExtractionResult = {
   success: boolean;
-
   documents: ExtractedDocument[];
-
   claim: Partial<ClaimInput>;
-
   confidence: number;
-
   processingState: "NORMAL" | "DEGRADED";
-
   trace: string[];
-
   errors: string[];
 };
-
 
 /* =========================================================
    NORMALIZATION HELPERS
@@ -78,13 +63,11 @@ function normalize(value: string): string {
     .toLowerCase();
 }
 
-
 function cleanText(value: string): string {
   return value
     .replace(/\r/g, "")
     .trim();
 }
-
 
 /* =========================================================
    DOCUMENT TYPE DETECTION
@@ -103,19 +86,19 @@ export function detectDocumentType(
   }
 
   if (
-    name.includes("lab") ||
-    name.includes("report") ||
-    name.includes("diagnostic")
-  ) {
-    return "LAB_REPORT";
-  }
-
-  if (
     name.includes("pharmacy") ||
     name.includes("medicine") ||
     name.includes("drug")
   ) {
     return "PHARMACY_BILL";
+  }
+
+  if (
+    name.includes("lab") ||
+    name.includes("report") ||
+    name.includes("diagnostic")
+  ) {
+    return "LAB_REPORT";
   }
 
   if (
@@ -129,29 +112,87 @@ export function detectDocumentType(
   return "UNKNOWN";
 }
 
-
 /* =========================================================
    FIELD EXTRACTION
 ========================================================= */
 
+/*
+ * Patient name extraction
+ *
+ * OCR may produce formats such as:
+ *
+ * Patient Name: R. Karthik
+ * Patient Name - R. Karthik
+ * Patient Name | R. Karthik
+ * Patient Name © R. Karthik
+ * Patient: R. Karthik
+ *
+ * Some OCR output puts the next field on the same line:
+ *
+ * Patient Name © R. Karthik Consultation Type : General Medicine
+ *
+ * Therefore we explicitly stop before common following
+ * field labels.
+ */
+
 function extractPatientName(
   text: string
 ): ExtractedField<string> | undefined {
+  const patientNamePattern =
+    /(?:patient\s*name|patient)\s*(?:[:\-|©]\s*)+([A-Za-z][A-Za-z .'-]{1,})(?=\s+(?:consultation\s+type|patient\s+id|patient\s*id|doctor|age\s*\/?\s*gender|registration\s*(?:no|number)?|date|follow\s*up|bill\s*(?:no|number)?|patient\s*id|policy\s*(?:no|number)?|insurance\s*(?:co|company)|department|$))/i;
+
   const match = text.match(
-    /(?:patient\s*name|patient|name)\s*[:\-]\s*([A-Za-z][A-Za-z .'-]{2,})/i
+    patientNamePattern
   );
 
   if (!match) {
+    /*
+     * Fallback for a patient-name field that appears
+     * on its own line and does not have another known
+     * field immediately after it.
+     */
+    const fallback =
+      text.match(
+        /(?:patient\s*name|patient)\s*(?:[:\-|©]\s*)+([A-Za-z][A-Za-z .'-]{1,})/i
+      );
+
+    if (!fallback) {
+      return undefined;
+    }
+
+    const value = fallback[1]
+      .trim()
+      .replace(/\s+/g, " ");
+
+    if (!value) {
+      return undefined;
+    }
+
+    return {
+      value,
+      confidence: 0.90,
+      source: "text",
+    };
+  }
+
+  const value = match[1]
+    .trim()
+    .replace(/\s+/g, " ");
+
+  if (!value) {
     return undefined;
   }
 
   return {
-    value: match[1].trim(),
-    confidence: 0.92,
+    value,
+    confidence: 0.96,
     source: "text",
   };
 }
 
+/*
+ * Employee ID extraction
+ */
 
 function extractEmployeeId(
   text: string
@@ -171,6 +212,9 @@ function extractEmployeeId(
   };
 }
 
+/*
+ * Date extraction
+ */
 
 function extractDate(
   text: string
@@ -206,6 +250,9 @@ function extractDate(
   return undefined;
 }
 
+/*
+ * Amount extraction
+ */
 
 function extractAmount(
   text: string
@@ -231,6 +278,9 @@ function extractAmount(
   return undefined;
 }
 
+/*
+ * Hospital / provider name
+ */
 
 function extractHospitalName(
   text: string
@@ -250,6 +300,9 @@ function extractHospitalName(
   };
 }
 
+/*
+ * Diagnosis
+ */
 
 function extractDiagnosis(
   text: string
@@ -269,6 +322,9 @@ function extractDiagnosis(
   };
 }
 
+/*
+ * Treatment / procedure / test / service
+ */
 
 function extractTreatment(
   text: string
@@ -288,7 +344,6 @@ function extractTreatment(
   };
 }
 
-
 /* =========================================================
    SINGLE DOCUMENT EXTRACTION
 ========================================================= */
@@ -304,7 +359,6 @@ export function extractDocument(
     cleanText(input.text ?? "");
 
   const fields: ExtractedDocument["fields"] = {};
-
   const messages: string[] = [];
 
   if (!text) {
@@ -321,7 +375,6 @@ export function extractDocument(
       messages,
     };
   }
-
 
   /* -------------------------------------------------------
      Extract individual fields
@@ -383,7 +436,6 @@ export function extractDocument(
       treatment;
   }
 
-
   /* -------------------------------------------------------
      Determine extraction status
   ------------------------------------------------------- */
@@ -406,6 +458,16 @@ export function extractDocument(
     };
   }
 
+  /*
+   * Patient identity is particularly important.
+   * If we have it, explicitly record that in the trace.
+   */
+  if (fields.patientName?.value) {
+    messages.push(
+      `Patient name extracted: "${fields.patientName.value}".`
+    );
+  }
+
   if (fieldCount < 2) {
     messages.push(
       "Only a subset of expected fields could be extracted."
@@ -415,7 +477,9 @@ export function extractDocument(
       filename: input.filename,
       documentType,
       fields,
-      confidence: 0.65,
+      confidence: fields.patientName
+        ? 0.78
+        : 0.65,
       status: "PARTIAL",
       messages,
     };
@@ -434,7 +498,6 @@ export function extractDocument(
     messages,
   };
 }
-
 
 /* =========================================================
    CLAIM FIELD MERGING
@@ -457,7 +520,6 @@ function mergeField<T>(
     ? incoming
     : current;
 }
-
 
 /* =========================================================
    BUILD STRUCTURED CLAIM
@@ -489,7 +551,6 @@ function buildStructuredClaim(
   let treatment:
     | ExtractedField<string>
     | undefined;
-
 
   for (const document of documents) {
     employeeId =
@@ -529,7 +590,6 @@ function buildStructuredClaim(
       );
   }
 
-
   const claim: Partial<ClaimInput> = {};
 
   if (employeeId?.value) {
@@ -557,19 +617,16 @@ function buildStructuredClaim(
       amount.value;
   }
 
-
   /*
-   * Treatment is not directly assigned to
-   * ClaimInput because ClaimInput expects
-   * a controlled TreatmentType.
+   * Treatment is intentionally not assigned here because
+   * ClaimInput expects a controlled TreatmentType.
    *
-   * We keep the raw extracted treatment
-   * for the caller to interpret.
+   * The raw extracted treatment remains available through
+   * each document's fields.treatment.
    */
 
   return claim;
 }
-
 
 /* =========================================================
    EXTRACTION CONFIDENCE
@@ -596,7 +653,6 @@ function calculateOverallConfidence(
     ).toFixed(2)
   );
 }
-
 
 /* =========================================================
    MAIN EXTRACTION PIPELINE
@@ -646,7 +702,6 @@ export function extractClaimDocuments(
       return result;
     });
 
-
   const claim =
     buildStructuredClaim(
       documents
@@ -660,7 +715,6 @@ export function extractClaimDocuments(
   let processingState:
     | "NORMAL"
     | "DEGRADED" = "NORMAL";
-
 
   if (
     documents.some(
@@ -677,7 +731,6 @@ export function extractClaimDocuments(
     );
   }
 
-
   if (
     errors.length > 0
   ) {
@@ -690,25 +743,17 @@ export function extractClaimDocuments(
     );
   }
 
-
   return {
     success:
       errors.length === 0,
-
     documents,
-
     claim,
-
     confidence,
-
     processingState,
-
     trace,
-
     errors,
   };
 }
-
 
 /* =========================================================
    TREATMENT TYPE HELPER
