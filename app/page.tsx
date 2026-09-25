@@ -697,9 +697,9 @@ export default function Home() {
       new AbortController();
 
     const timeoutId =
-      window.setTimeout(() => {
-        controller.abort();
-      }, 12000);
+  window.setTimeout(() => {
+    controller.abort();
+  }, 110000);
 
     try {
       const formData =

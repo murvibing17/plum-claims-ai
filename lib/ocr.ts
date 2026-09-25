@@ -10,19 +10,9 @@ export interface OCRResult {
 
 type OCRInput = string | Buffer;
 
-function getWorkerPath(): string {
-  return path.resolve(
-    process.cwd(),
-    "node_modules",
-    "tesseract.js",
-    "src",
-    "worker-script",
-    "node",
-    "index.js"
-  );
-}
-
-function makeDegradedResult(message: string): OCRResult {
+function makeDegradedResult(
+  message: string
+): OCRResult {
   return {
     text: "",
     confidence: 0.2,
@@ -32,6 +22,18 @@ function makeDegradedResult(message: string): OCRResult {
       message,
     ],
   };
+}
+
+function getWorkerPath() {
+  return path.join(
+    process.cwd(),
+    "node_modules",
+    "tesseract.js",
+    "src",
+    "worker-script",
+    "node",
+    "index.js"
+  );
 }
 
 export async function runOCRBatch(
@@ -45,31 +47,46 @@ export async function runOCRBatch(
     | Awaited<ReturnType<typeof createWorker>>
     | null = null;
 
-  const results: OCRResult[] = [];
-
   try {
-    const workerPath = getWorkerPath();
-
+    /*
+     * IMPORTANT:
+     *
+     * Do not load the worker by require().
+     * Tesseract expects this file to run inside
+     * its own worker thread.
+     */
     worker = await createWorker(
       "eng",
       1,
       {
-        workerPath,
+        workerPath: getWorkerPath(),
+        logger: () => {
+          // Keep server logs quiet.
+          // OCR progress is represented in our own trace.
+        },
       }
     );
 
-    for (let index = 0; index < inputs.length; index += 1) {
+    const results: OCRResult[] = [];
+
+    for (
+      let index = 0;
+      index < inputs.length;
+      index += 1
+    ) {
       const input = inputs[index];
 
-      const trace: string[] = [
+      const trace = [
         "Starting OCR recognition.",
         `Processing document ${index + 1} of ${inputs.length}.`,
       ];
 
       try {
-        const { data } = await worker.recognize(input);
+        const result =
+          await worker.recognize(input);
 
-        const text = data.text?.trim() ?? "";
+        const text =
+          result.data.text?.trim() ?? "";
 
         if (!text) {
           results.push({
@@ -85,13 +102,20 @@ export async function runOCRBatch(
           continue;
         }
 
+        const rawConfidence =
+          typeof result.data.confidence ===
+          "number"
+            ? result.data.confidence
+            : 70;
+
         const confidence =
-          typeof data.confidence === "number"
-            ? Math.max(
-                0,
-                Math.min(1, data.confidence / 100)
-              )
-            : 0.7;
+          Math.max(
+            0,
+            Math.min(
+              1,
+              rawConfidence / 100
+            )
+          );
 
         results.push({
           text,
@@ -113,7 +137,9 @@ export async function runOCRBatch(
             : "Unknown OCR recognition error.";
 
         results.push(
-          makeDegradedResult(message)
+          makeDegradedResult(
+            `Document ${index + 1}: ${message}`
+          )
         );
       }
     }
@@ -133,7 +159,7 @@ export async function runOCRBatch(
       try {
         await worker.terminate();
       } catch {
-        // Ignore cleanup errors.
+        // Ignore worker cleanup errors.
       }
     }
   }
@@ -142,7 +168,8 @@ export async function runOCRBatch(
 export async function runOCR(
   input: OCRInput
 ): Promise<OCRResult> {
-  const results = await runOCRBatch([input]);
+  const results =
+    await runOCRBatch([input]);
 
   return (
     results[0] ??
