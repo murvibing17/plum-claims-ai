@@ -153,11 +153,11 @@ const demoCases: DemoCase[] = [
     patientNames: ["Priya Singh"],
     dentalItems: [
       {
-        description: "Root Canal",
+        description: "Root Canal Treatment",
         amount: 8000,
       },
       {
-        description: "Whitening",
+        description: "Teeth Whitening",
         amount: 4000,
       },
     ],
