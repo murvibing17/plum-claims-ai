@@ -8,6 +8,15 @@ AI-powered employee health insurance claim review system that automates document
 - **GitHub:** https://github.com/murvibing17/plum-claims-ai
 
 ---
+## Project Highlights
+
+- **Policy-driven:** reads insurance rules from `policy_terms.json`
+- **Document-first:** validates required documents before decisioning
+- **Explainable:** every decision includes reasons, calculations, and processing trace
+- **Resilient:** component failures produce controlled degraded states
+- **Fraud-aware:** suspicious claims can be routed to `MANUAL_REVIEW`
+- **Tested:** 12/12 evaluation scenarios passing
+- **Deployed:** production application available on Vercel
 
 ## Overview
 
