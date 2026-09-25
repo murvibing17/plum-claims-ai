@@ -10,7 +10,7 @@ export interface OCRResult {
 
 type OCRInput = string | Buffer;
 
-function getWorkerPath() {
+function getWorkerPath(): string {
   return path.resolve(
     process.cwd(),
     "node_modules",
