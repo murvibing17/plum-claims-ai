@@ -1,52 +1,51 @@
-import { runOCR } from "@/lib/ocr";
+import { extractClaimOCR } from "@/lib/claim-ocr";
 
-export async function POST(request: Request) {
+export const runtime = "nodejs";
+export const maxDuration = 120;
+
+export async function POST(
+  request: Request
+) {
   try {
-    const formData = await request.formData();
+    const formData =
+      await request.formData();
 
-    const file = formData.get("file");
+    const files =
+      formData.getAll("files");
 
-    if (!(file instanceof File)) {
-      return Response.json(
-        {
-          success: false,
-          error: "No document file was provided.",
-        },
-        { status: 400 }
+    const uploadedFiles =
+      files.filter(
+        (file): file is File =>
+          file instanceof File
       );
-    }
 
-    const allowedTypes = [
-      "image/jpeg",
-      "image/png",
-      "image/webp",
-      "image/jpg",
-    ];
-
-    if (!allowedTypes.includes(file.type)) {
+    if (
+      uploadedFiles.length === 0
+    ) {
       return Response.json(
         {
           success: false,
           error:
-            "For the first OCR test, please upload a JPG, PNG, or WebP image.",
+            "No claim documents were provided.",
+          processingState: "DEGRADED",
         },
-        { status: 400 }
+        {
+          status: 400,
+        }
       );
     }
 
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    const result =
+      await extractClaimOCR(
+        uploadedFiles
+      );
 
-    const result = await runOCR(buffer);
-
-    return Response.json({
-      success: true,
-      fileName: file.name,
-      fileType: file.type,
-      ...result,
-    });
+    return Response.json(result);
   } catch (error) {
-    console.error("OCR API error:", error);
+    console.error(
+      "Claim OCR API error:",
+      error
+    );
 
     return Response.json(
       {
@@ -55,9 +54,12 @@ export async function POST(request: Request) {
           error instanceof Error
             ? error.message
             : "Unknown OCR processing error.",
-        processingState: "DEGRADED",
+        processingState:
+          "DEGRADED",
       },
-      { status: 500 }
+      {
+        status: 500,
+      }
     );
   }
 }
