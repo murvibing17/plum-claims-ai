@@ -600,58 +600,71 @@ export default function Home() {
     setOcrError("");
   }
 
-  async function runClaimOCR(files: File[]) {
-    if (files.length === 0) {
-      return null;
+async function runClaimOCR(files: File[]) {
+  if (files.length === 0) {
+    return null;
+  }
+
+  setOcrLoading(true);
+  setOcrError("");
+
+  const controller = new AbortController();
+
+  const timeoutId = window.setTimeout(() => {
+    controller.abort();
+  }, 12000);
+
+  try {
+    const formData = new FormData();
+
+    for (const file of files) {
+      formData.append("files", file);
     }
 
-    setOcrLoading(true);
-    setOcrError("");
+    const response = await fetch("/api/claim-ocr", {
+      method: "POST",
+      body: formData,
+      signal: controller.signal,
+    });
 
-    try {
-      const formData = new FormData();
+    const data = await response.json();
 
-      for (const file of files) {
-        formData.append("files", file);
-      }
-
-      const response = await fetch(
-        "/api/claim-ocr",
-        {
-          method: "POST",
-          body: formData,
-        }
+    if (!response.ok || !data.success) {
+      throw new Error(
+        data.error ?? "OCR processing failed."
       );
+    }
 
-      const data = await response.json();
+    setOcrResult(data);
 
-      if (!response.ok || !data.success) {
-        throw new Error(
-          data.error ??
-            "OCR processing failed."
-        );
-      }
-
-      setOcrResult(data);
-      return data;
-    } catch (error) {
-      const message =
-        error instanceof Error
+    return data;
+  } catch (error) {
+    const message =
+      error instanceof DOMException &&
+      error.name === "AbortError"
+        ? "OCR service timed out. Continuing claim review in degraded mode."
+        : error instanceof Error
           ? error.message
           : "Unable to connect to the OCR service.";
 
-      setOcrError(message);
-      setOcrResult(null);
-      return null;
-    } finally {
-      setOcrLoading(false);
-    }
-  }
+    console.warn("OCR degraded:", message);
 
-  async function handleSubmit(
-    event: React.FormEvent<HTMLFormElement>
-  ) {
-    event.preventDefault();
+    setOcrError(message);
+    setOcrResult(null);
+
+    // OCR failure must not block the policy decision engine.
+    return null;
+  } finally {
+    window.clearTimeout(timeoutId);
+    setOcrLoading(false);
+  }
+} // ← THIS closes runClaimOCR
+
+
+async function handleSubmit(
+  event: React.FormEvent<HTMLFormElement>
+) {
+  event.preventDefault();
 
     setLoading(true);
     setDocumentResult(null);
@@ -1471,3 +1484,5 @@ export default function Home() {
     </main>
   );
 }
+
+
